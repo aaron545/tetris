@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>俄羅斯方塊拼圖求解器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .grid-cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.5);
+            transition: all 0.2s ease;
+            position: relative;
+            box-sizing: border-box;
+            border: 1px solid rgba(255, 255, 255, 0.05); /* 預設極細微內線 */
+        }
+
+        /* 方塊基礎顏色 */
+        .piece-T { background-color: #9333ea; } 
+        .piece-I { background-color: #0891b2; } 
+        .piece-O { background-color: #ca8a04; } 
+        .piece-L { background-color: #ea580c; } 
+        .piece-J { background-color: #2563eb; } 
+        .piece-empty { background-color: #111827; }
+
+        /* 動態描邊樣式：當鄰居不同時顯示粗黑邊框 */
+        .border-t-strong { border-top: 3px solid #000 !important; }
+        .border-b-strong { border-bottom: 3px solid #000 !important; }
+        .border-l-strong { border-left: 3px solid #000 !important; }
+        .border-r-strong { border-right: 3px solid #000 !important; }
+
+        /* 內部亮光增強立體感 (僅限於方塊) */
+        .piece-active::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px; right: 2px; bottom: 2px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            border-left: 1px solid rgba(255,255,255,0.3);
+            pointer-events: none;
+        }
+
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .calculating { animation: pulse-slow 1.5s infinite; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+                🧩 俄羅斯方塊矩陣求解器
+            </h1>
+            <p class="text-gray-400 text-sm">物件導向描邊：清楚顯示每個方塊的完整輪廓</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-1 space-y-6 bg-gray-900 p-6 rounded-2xl border border-gray-800 shadow-2xl">
+                <div>
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <span class="mr-2">📏</span> 矩陣尺寸
+                    </h2>
+                    <div class="flex gap-4">
+                        <div class="flex-1">
+                            <label class="block text-xs text-gray-500 mb-1">高度 (Rows)</label>
+                            <input type="number" id="input-rows" value="7" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-center focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-xs text-gray-500 mb-1">寬度 (Cols)</label>
+                            <input type="number" id="input-cols" value="8" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-center focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <span class="mr-2">📦</span> 方塊清單
+                    </h2>
+                    <div id="piece-controls" class="space-y-3"></div>
+                </div>
+
+                <div class="pt-4 border-t border-gray-800">
+                    <div class="flex justify-between mb-2 text-sm">
+                        <span>總格數：<span id="total-cells" class="font-mono text-blue-400">0</span></span>
+                        <span>需求：<span id="needed-cells" class="font-mono text-purple-400">0</span></span>
+                    </div>
+                    <div id="status-msg" class="text-xs mb-4 text-center py-2 rounded font-medium min-h-[40px] flex items-center justify-center"></div>
+                    <div class="flex gap-2">
+                        <button id="solve-btn" class="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg active:scale-95">
+                            🚀 開始求解
+                        </button>
+                        <button id="stop-btn" class="hidden bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-4 rounded-xl transition-all">
+                            🛑 停止
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 bg-gray-900 p-6 rounded-2xl border border-gray-800 shadow-2xl flex flex-col items-center justify-center min-h-[450px]">
+                <div id="grid-container" class="grid gap-0 w-full max-w-md bg-black p-1 rounded border-4 border-gray-700"></div>
+                <div id="result-info" class="mt-6 text-gray-500 text-sm italic h-6 text-center">準備就緒...</div>
+                <div id="step-count" class="text-[10px] text-gray-600 mt-2 font-mono"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PIECE_DEFINITIONS = {
+            T: [[0, 0], [0, 1], [0, 2], [1, 1]],
+            I: [[0, 0], [0, 1], [0, 2], [0, 3]],
+            O: [[0, 0], [0, 1], [1, 0], [1, 1]],
+            L: [[0, 0], [1, 0], [2, 0], [2, 1]],
+            J: [[0, 1], [1, 1], [2, 1], [2, 0]]
+        };
+        const PIECE_COLORS = { T: 'piece-T', I: 'piece-I', O: 'piece-O', L: 'piece-L', J: 'piece-J' };
+        let pieceCounts = { T: 4, I: 3, O: 2, L: 4, J: 1 };
+        let rotationsCache = {};
+        let isSolving = false;
+        let iterations = 0;
+
+        function precomputeRotations() {
+            for (const type in PIECE_DEFINITIONS) {
+                rotationsCache[type] = getAllRotations(PIECE_DEFINITIONS[type]);
+            }
+        }
+
+        function rotate(shape) { return shape.map(([r, c]) => [c, -r]); }
+        function normalize(shape) {
+            const minRow = Math.min(...shape.map(([r]) => r));
+            const minCol = Math.min(...shape.map(([, c]) => c));
+            return shape.map(([r, c]) => [r - minRow, c - minCol]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+        }
+        function getAllRotations(shape) {
+            const unique = []; const seen = new Set(); let curr = shape;
+            for (let i = 0; i < 4; i++) {
+                curr = normalize(curr); const key = JSON.stringify(curr);
+                if (!seen.has(key)) { seen.add(key); unique.push(curr); }
+                curr = rotate(curr);
+            }
+            return unique;
+        }
+
+        async function solveAsync(board, remaining, usedCounts) {
+            if (!isSolving) return false;
+            iterations++;
+            if (iterations % 5000 === 0) {
+                document.getElementById('step-count').innerText = `已嘗試: ${iterations.toLocaleString()} 次組合`;
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+
+            let row = -1, col = -1;
+            for (let r = 0; r < board.length; r++) {
+                for (let c = 0; c < board[0].length; c++) {
+                    if (board[r][c] === 0) { row = r; col = c; break; }
+                }
+                if (row !== -1) break;
+            }
+            if (row === -1) return true;
+
+            for (const type in remaining) {
+                if (remaining[type] <= 0) continue;
+                for (const shape of rotationsCache[type]) {
+                    for (const [dr, dc] of shape) {
+                        const startR = row - dr;
+                        const startC = col - dc;
+                        if (canPlace(board, shape, startR, startC)) {
+                            const pieceId = `${type}_${type}${usedCounts[type] + 1}`;
+                            placePiece(board, shape, startR, startC, pieceId);
+                            remaining[type]--;
+                            usedCounts[type]++;
+                            if (await solveAsync(board, remaining, usedCounts)) return true;
+                            usedCounts[type]--;
+                            remaining[type]++;
+                            placePiece(board, shape, startR, startC, 0);
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function canPlace(board, shape, r, c) {
+            for (const [dr, dc] of shape) {
+                const nr = r + dr, nc = c + dc;
+                if (nr < 0 || nr >= board.length || nc < 0 || nc >= board[0].length || board[nr][nc] !== 0) return false;
+            }
+            return true;
+        }
+
+        function placePiece(board, shape, r, c, val) {
+            for (const [dr, dc] of shape) board[r + dr][c + dc] = val;
+        }
+
+        function init() {
+            precomputeRotations();
+            const container = document.getElementById('piece-controls');
+            Object.keys(pieceCounts).forEach(type => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between bg-gray-800 p-3 rounded-xl border border-gray-700';
+                div.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="w-6 h-6 rounded border border-black/50 ${PIECE_COLORS[type]} mr-3"></div>
+                        <span class="font-bold text-gray-200">${type} 型</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="updatePiece('${type}', -1)" class="w-8 h-8 bg-gray-700 rounded-full hover:bg-gray-600 flex items-center justify-center">-</button>
+                        <span id="count-${type}" class="w-4 text-center font-mono font-bold text-blue-400">${pieceCounts[type]}</span>
+                        <button onclick="updatePiece('${type}', 1)" class="w-8 h-8 bg-gray-700 rounded-full hover:bg-gray-600 flex items-center justify-center">+</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            updateStats();
+            renderGrid();
+        }
+
+        window.updatePiece = (type, delta) => {
+            if (isSolving) return;
+            pieceCounts[type] = Math.max(0, pieceCounts[type] + delta);
+            document.getElementById(`count-${type}`).innerText = pieceCounts[type];
+            updateStats();
+        };
+
+        function updateStats() {
+            const rows = parseInt(document.getElementById('input-rows').value) || 0;
+            const cols = parseInt(document.getElementById('input-cols').value) || 0;
+            const needed = rows * cols;
+            const total = Object.values(pieceCounts).reduce((a, b) => a + b, 0) * 4;
+            const tCount = pieceCounts['T'];
+
+            document.getElementById('total-cells').innerText = total;
+            document.getElementById('needed-cells').innerText = needed;
+
+            const btn = document.getElementById('solve-btn');
+            const msg = document.getElementById('status-msg');
+            const info = document.getElementById('result-info');
+
+            if (total !== needed) {
+                btn.disabled = true;
+                msg.innerText = `❌ 面積不符 (差 ${needed - total} 格)`;
+                msg.className = "text-xs mb-4 text-center py-2 rounded bg-red-900/20 text-red-400 border border-red-900/50";
+                return;
+            }
+
+            if (tCount % 2 !== 0) {
+                btn.disabled = true;
+                msg.innerText = `❌ 數學預判無解：T 型方塊必須為偶數個`;
+                msg.className = "text-xs mb-4 text-center py-2 rounded bg-orange-900/20 text-orange-400 border border-orange-900/50";
+                info.innerText = "根據棋盤奇偶校驗原理，奇數個 T 方塊無法填滿此矩陣。";
+                return;
+            }
+
+            btn.disabled = false;
+            msg.innerText = "✅ 參數符合數學基本條件";
+            msg.className = "text-xs mb-4 text-center py-2 rounded bg-green-900/20 text-green-400 border border-green-900/50";
+            if (!isSolving) info.innerText = "準備就緒，點擊開始運算";
+        }
+
+        function renderGrid(board = null) {
+            const rows = parseInt(document.getElementById('input-rows').value) || 0;
+            const cols = parseInt(document.getElementById('input-cols').value) || 0;
+            const container = document.getElementById('grid-container');
+            container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+            container.innerHTML = '';
+            
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const cell = document.createElement('div');
+                    const pieceId = board ? board[r][c] : 0;
+                    const typeChar = pieceId ? pieceId.split('_')[0] : null;
+                    
+                    cell.className = `grid-cell ${typeChar ? PIECE_COLORS[typeChar] + ' piece-active' : 'piece-empty'}`;
+                    
+                    // 核心邏輯：描邊檢查
+                    if (pieceId) {
+                        // 檢查上方
+                        if (r === 0 || board[r-1][c] !== pieceId) cell.classList.add('border-t-strong');
+                        // 檢查下方
+                        if (r === rows-1 || board[r+1][c] !== pieceId) cell.classList.add('border-b-strong');
+                        // 檢查左方
+                        if (c === 0 || board[r][c-1] !== pieceId) cell.classList.add('border-l-strong');
+                        // 檢查右方
+                        if (c === cols-1 || board[r][c+1] !== pieceId) cell.classList.add('border-r-strong');
+                    }
+                    
+                    // 顯示縮寫編號 (可選)
+                    if (pieceId) {
+                        const label = pieceId.split('_')[1];
+                        cell.innerHTML = `<span style="transform: scale(0.8)">${label}</span>`;
+                    }
+                    
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        document.getElementById('solve-btn').onclick = async () => {
+            const rows = parseInt(document.getElementById('input-rows').value);
+            const cols = parseInt(document.getElementById('input-cols').value);
+            const board = Array.from({ length: rows }, () => Array(cols).fill(0));
+            
+            isSolving = true;
+            iterations = 0;
+            renderGrid(null);
+            
+            const btn = document.getElementById('solve-btn');
+            const stopBtn = document.getElementById('stop-btn');
+            const info = document.getElementById('result-info');
+            
+            btn.innerText = "⚡ 正在搜尋...";
+            btn.disabled = true;
+            btn.classList.add('calculating');
+            stopBtn.classList.remove('hidden');
+
+            const start = Date.now();
+            const success = await solveAsync(board, { ...pieceCounts }, { T:0, I:0, O:0, L:0, J:0 });
+            const end = Date.now();
+
+            isSolving = false;
+            btn.classList.remove('calculating');
+            stopBtn.classList.add('hidden');
+
+            if (success) {
+                renderGrid(board);
+                info.innerText = `成功！耗時 ${((end - start)/1000).toFixed(2)}s`;
+                info.className = "mt-6 text-blue-400 text-sm font-bold";
+            } else {
+                info.innerText = iterations === 0 ? "已停止。" : "❌ 確定無解。";
+                info.className = "mt-6 text-red-400 text-sm font-semibold";
+            }
+            btn.innerText = "🚀 開始求解";
+            updateStats();
+        };
+
+        document.getElementById('stop-btn').onclick = () => { isSolving = false; };
+        document.getElementById('input-rows').oninput = () => { if(!isSolving){updateStats(); renderGrid();} };
+        document.getElementById('input-cols').oninput = () => { if(!isSolving){updateStats(); renderGrid();} };
+
+        init();
+    </script>
+</body>
+</html>
