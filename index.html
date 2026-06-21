@@ -4,33 +4,130 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>俄羅斯方塊拼圖求解器</title>
-    <!-- 引入 Tailwind CSS -->
+    <!-- 引入 Tailwind CSS 確保極速與精美的樣式設計 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 React 與 Babel (用於直接在瀏覽器解析 JSX) -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- 引入 Lucide 圖標庫 -->
-    <script src="https://unpkg.com"></script>
-    <script src="https://unpkg.com"></script>
+    <style>
+        /* 內部亮光增強立體感 (僅限於方塊) */
+        .piece-active::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px; right: 2px; bottom: 2px;
+            border-top: 1px solid rgba(255,255,255,0.25);
+            border-left: 1px solid rgba(255,255,255,0.25);
+            pointer-events: none;
+        }
+    </style>
 </head>
-<body class="bg-gray-950">
-    <div id="root"></div>
+<body class="bg-gray-950 text-gray-100 min-h-screen p-6 font-sans">
 
-    <script type="text/babel">
-        // 修正：從全域物件正確提取 LucideReact 組件
-        const { useState, useEffect, useRef, useCallback } = React;
-        
-        // 確保在 CDN 模式下正確獲取圖標組件
-        const { 
-          Play, 
-          Square, 
-          AlertTriangle, 
-          CheckCircle, 
-          Info, 
-          RefreshCw 
-        } = window.LucideReact || {};
+    <div class="max-w-5xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent inline-block">
+                Tetris Puzzle Solver
+            </h1>
+            <p class="text-gray-500 mt-2">原生高可靠性引擎：100% 免疫加載與編譯崩潰</p>
+        </header>
 
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- 左側控制面板 -->
+            <div class="lg:col-span-4 space-y-6">
+                <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 shadow-2xl">
+                    
+                    <!-- 矩陣設定 -->
+                    <h2 class="flex items-center text-lg font-bold mb-4 text-gray-200">
+                        <!-- Square SVG Icon -->
+                        <svg class="w-5 h-5 mr-2 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        </svg>
+                        矩陣設定
+                    </h2>
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="text-xs text-gray-500 uppercase font-bold tracking-wider">Rows (高)</label>
+                            <input 
+                                type="number" 
+                                id="input-rows" 
+                                value="8" 
+                                min="1"
+                                class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 mt-1 focus:ring-2 focus:ring-blue-500 outline-none text-center font-bold" 
+                            />
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500 uppercase font-bold tracking-wider">Cols (寬)</label>
+                            <input 
+                                type="number" 
+                                id="input-cols" 
+                                value="7" 
+                                min="1"
+                                class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 mt-1 focus:ring-2 focus:ring-blue-500 outline-none text-center font-bold" 
+                            />
+                        </div>
+                      </div>
+
+                      <!-- 方塊庫存 -->
+                      <h2 class="flex items-center text-lg font-bold mb-4 text-gray-200">
+                        <!-- RefreshCw SVG Icon -->
+                        <svg class="w-5 h-5 mr-2 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"/>
+                            <polyline points="1 20 1 14 7 14"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        方塊庫存
+                      </h2>
+                      
+                      <div id="piece-controls-container" class="space-y-2">
+                          <!-- JS 將動態在此生成方塊控制器 -->
+                      </div>
+
+                      <!-- 狀態與執行 -->
+                      <div class="mt-8 pt-6 border-t border-gray-800">
+                        <div id="status-box" class="flex items-center justify-center p-4 rounded-2xl mb-4 text-sm font-medium transition-colors">
+                            <!-- JS 動態更新狀態文字 -->
+                        </div>
+                        
+                        <div class="flex gap-2">
+                            <button 
+                              id="solve-btn"
+                              class="flex-1 py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 rounded-2xl font-bold flex items-center justify-center shadow-xl text-white transition-all active:scale-95"
+                            >
+                              <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/>
+                              </svg>
+                              <span id="btn-text">開始求解</span>
+                            </button>
+                            
+                            <button 
+                              id="stop-btn"
+                              class="hidden px-6 py-4 bg-red-600 hover:bg-red-500 rounded-2xl font-bold flex items-center justify-center shadow-xl text-white transition-all active:scale-95"
+                            >
+                              停止
+                            </button>
+                        </div>
+                      </div>
+                </div>
+            </div>
+
+            <!-- 右側畫布區域 -->
+            <div class="lg:col-span-8 flex flex-col items-center justify-center bg-gray-900 border border-gray-800 rounded-3xl p-8 shadow-2xl min-h-[500px]">
+                <div 
+                  id="board-grid"
+                  class="grid bg-black p-2 rounded-lg border-8 border-gray-800 transition-all duration-300"
+                  style="width: 100%; max-w: 350px;"
+                >
+                    <!-- JS 將動態在此生成網格單元 -->
+                </div>
+                
+                <div class="mt-8 text-center">
+                    <div id="iterations-info" class="text-gray-500 text-sm italic">
+                        準備就緒，設定妥當後即可點擊「開始求解」
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 方塊結構定義
         const PIECE_DEFINITIONS = {
           T: [[0, 0], [0, 1], [0, 2], [1, 1]],
           I: [[0, 0], [0, 1], [0, 2], [0, 3]],
@@ -48,220 +145,301 @@
           empty: 'bg-gray-900'
         };
 
-        const App = () => {
-          const [rows, setRows] = useState(8);
-          const [cols, setCols] = useState(7);
-          const [pieceCounts, setPieceCounts] = useState({ T: 4, I: 3, O: 2, L: 4, J: 1 });
-          const [board, setBoard] = useState([]);
-          const [isSolving, setIsSolving] = useState(false);
-          const [status, setStatus] = useState({ type: 'ready', message: '準備就緒' });
-          const [iterations, setIterations] = useState(0);
-          const stopRef = useRef(false);
+        // 全域狀態
+        let rows = 8;
+        let cols = 7;
+        let pieceCounts = { T: 4, I: 3, O: 2, L: 4, J: 1 };
+        let board = Array.from({ length: 8 }, () => Array(7).fill(0));
+        let isSolving = false;
+        let iterations = 0;
+        let shouldStop = false;
+        let rotationsCache = {};
 
-          useEffect(() => {
-            const emptyBoard = Array.from({ length: rows }, () => Array(cols).fill(0));
-            setBoard(emptyBoard);
-            validate(rows, cols, pieceCounts);
-          }, [rows, cols]);
+        // 初始化
+        function init() {
+            precomputeRotations();
+            renderPieceControls();
+            setupEventListeners();
+            updateBoardSize();
+            validate();
+        }
 
-          const validate = (r, c, counts) => {
-            const needed = r * c;
-            const total = Object.values(counts).reduce((a, b) => a + b, 0) * 4;
-            const tCount = counts.T;
-            if (total !== needed) {
-              setStatus({ type: 'error', message: `面積不符 (差 ${needed - total} 格)` });
-              return false;
-            }
-            if (tCount % 2 !== 0) {
-              setStatus({ type: 'error', message: `數學預判無解：T 型必須為偶數個` });
-              return false;
-            }
-            setStatus({ type: 'ok', message: `✅ 參數符合數學基本條件` });
-            return true;
-          };
-
-          const handleCountChange = (type, delta) => {
-            if (isSolving) return;
-            const newCounts = { ...pieceCounts, [type]: Math.max(0, pieceCounts[type] + delta) };
-            setPieceCounts(newCounts);
-            validate(rows, cols, newCounts);
-          };
-
-          const getRotations = (shape) => {
+        // 預先計算旋轉狀態以提高效能
+        function precomputeRotations() {
             const rotate = (s) => s.map(([r, c]) => [c, -r]);
             const normalize = (s) => {
               const minR = Math.min(...s.map(([r]) => r));
               const minC = Math.min(...s.map(([, c]) => c));
               return s.map(([r, c]) => [r - minR, c - minC]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
             };
-            const unique = []; const seen = new Set(); let curr = shape;
-            for (let i = 0; i < 4; i++) {
-              curr = normalize(curr);
-              const key = JSON.stringify(curr);
-              if (!seen.has(key)) { seen.add(key); unique.push(curr); }
-              curr = rotate(curr);
-            }
-            return unique;
-          };
 
-          const canPlace = (currBoard, shape, r, c) => {
-            for (const [dr, dc] of shape) {
-              const nr = r + dr, nc = c + dc;
-              if (nr < 0 || nr >= rows || nc < 0 || nc >= cols || currBoard[nr][nc] !== 0) return false;
+            for (const type in PIECE_DEFINITIONS) {
+                const unique = [];
+                const seen = new Set();
+                let curr = PIECE_DEFINITIONS[type];
+                for (let i = 0; i < 4; i++) {
+                    curr = normalize(curr);
+                    const key = JSON.stringify(curr);
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        unique.push(curr);
+                    }
+                    curr = rotate(curr);
+                }
+                rotationsCache[type] = unique;
             }
+        }
+
+        // 渲染方塊存量控制器
+        function renderPieceControls() {
+            const container = document.getElementById('piece-controls-container');
+            container.innerHTML = '';
+            
+            Object.entries(pieceCounts).forEach(([type, count]) => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between bg-gray-800/50 p-3 rounded-xl border border-gray-700/50';
+                div.innerHTML = `
+                    <div class="flex items-center">
+                      <div class="w-4 h-4 rounded-sm ${PIECE_COLORS[type]} mr-3 shadow-sm border border-black/20"></div>
+                      <span class="font-bold">${type} 型</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <button onclick="changePieceCount('${type}', -1)" class="w-8 h-8 flex items-center justify-center bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors text-lg font-bold">-</button>
+                      <span id="count-${type}" class="w-6 text-center font-mono font-bold text-blue-400">${count}</span>
+                      <button onclick="changePieceCount('${type}', 1)" class="w-8 h-8 flex items-center justify-center bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors text-lg font-bold">+</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // 修改方塊數量
+        window.changePieceCount = function(type, delta) {
+            if (isSolving) return;
+            pieceCounts[type] = Math.max(0, pieceCounts[type] + delta);
+            document.getElementById(`count-${type}`).innerText = pieceCounts[type];
+            validate();
+        }
+
+        // 更新網格尺寸
+        function updateBoardSize() {
+            board = Array.from({ length: rows }, () => Array(cols).fill(0));
+            renderBoard();
+        }
+
+        // 核心：描邊與邊框渲染邏輯
+        function getCellBorders(r, c) {
+            const pieceId = board[r][c];
+            if (!pieceId) return "";
+            let borders = "";
+            if (r === 0 || !board[r - 1] || board[r - 1][c] !== pieceId) borders += " border-t-[3px] border-t-black";
+            if (r === rows - 1 || !board[r + 1] || board[r + 1][c] !== pieceId) borders += " border-b-[3px] border-b-black";
+            if (c === 0 || board[r][c - 1] !== pieceId) borders += " border-l-[3px] border-l-black";
+            if (c === cols - 1 || board[r][c + 1] !== pieceId) borders += " border-r-[3px] border-r-black";
+            return borders;
+        }
+
+        // 渲染畫布網格
+        function renderBoard() {
+            const grid = document.getElementById('board-grid');
+            grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+            grid.style.maxWidth = `${cols * 48}px`;
+            grid.innerHTML = '';
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const cell = document.createElement('div');
+                    const value = board[r][c];
+                    const type = value ? value.split('_')[0] : 'empty';
+                    
+                    cell.className = `aspect-square relative flex items-center justify-center text-[8px] font-black ${PIECE_COLORS[type]} ${getCellBorders(r, c)}`;
+                    
+                    if (value) {
+                        const label = value.split('_')[1];
+                        cell.innerHTML = `<span class="opacity-40">${label}</span>`;
+                        // 建立立體感高光層
+                        const highlight = document.createElement('div');
+                        highlight.className = 'absolute inset-[2px] border-t border-l border-white/20 pointer-events-none';
+                        cell.appendChild(highlight);
+                    }
+                    
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        // 即時校驗奇偶性與面積
+        function validate() {
+            const needed = rows * cols;
+            const total = Object.values(pieceCounts).reduce((a, b) => a + b, 0) * 4;
+            const tCount = pieceCounts.T;
+
+            const statusBox = document.getElementById('status-box');
+            const solveBtn = document.getElementById('solve-btn');
+
+            if (total !== needed) {
+                statusBox.className = "flex items-center justify-center p-4 rounded-2xl mb-4 text-sm font-medium bg-red-500/10 text-red-400 border border-red-500/20";
+                statusBox.innerHTML = `
+                    <svg class="w-4 h-4 mr-2 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    <span>面積不符 (差 ${needed - total} 格)</span>
+                `;
+                solveBtn.disabled = true;
+                return false;
+            }
+
+            if (tCount % 2 !== 0) {
+                statusBox.className = "flex items-center justify-center p-4 rounded-2xl mb-4 text-sm font-medium bg-red-500/10 text-red-400 border border-red-500/20";
+                statusBox.innerHTML = `
+                    <svg class="w-4 h-4 mr-2 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    <span>數學預判無解：T 型必須為偶數個</span>
+                `;
+                solveBtn.disabled = true;
+                return false;
+            }
+
+            statusBox.className = "flex items-center justify-center p-4 rounded-2xl mb-4 text-sm font-medium bg-green-500/10 text-green-400 border border-green-500/20";
+            statusBox.innerHTML = `
+                <svg class="w-4 h-4 mr-2 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+                <span>✅ 參數符合數學基本條件</span>
+            `;
+            if (!isSolving) solveBtn.disabled = false;
             return true;
-          };
+        }
 
-          const placePiece = (currBoard, shape, r, c, val) => {
-            for (const [dr, dc] of shape) currBoard[r + dr][c + dc] = val;
-          };
+        // 事件監聽綁定
+        function setupEventListeners() {
+            document.getElementById('input-rows').addEventListener('input', (e) => {
+                rows = Math.max(1, parseInt(e.target.value) || 1);
+                updateBoardSize();
+                validate();
+            });
 
-          const startSolving = async () => {
-            if (!validate(rows, cols, pieceCounts)) return;
-            setIsSolving(true);
-            stopRef.current = false;
-            let localIterations = 0;
-            const rotationsCache = {};
-            Object.keys(PIECE_DEFINITIONS).forEach(k => rotationsCache[k] = getRotations(PIECE_DEFINITIONS[k]));
+            document.getElementById('input-cols').addEventListener('input', (e) => {
+                cols = Math.max(1, parseInt(e.target.value) || 1);
+                updateBoardSize();
+                validate();
+            });
+
+            document.getElementById('solve-btn').addEventListener('click', () => {
+                if (isSolving) return;
+                startSolving();
+            });
+
+            document.getElementById('stop-btn').addEventListener('click', () => {
+                shouldStop = true;
+            });
+        }
+
+        // 開始異步求解
+        async function startSolving() {
+            isSolving = true;
+            shouldStop = false;
+            iterations = 0;
+            
+            // UI 狀態更新
+            document.getElementById('solve-btn').disabled = true;
+            document.getElementById('stop-btn').classList.remove('hidden');
+            document.getElementById('btn-text').innerText = '正在求解...';
+            document.getElementById('iterations-info').innerText = '正在深度搜尋組合中...';
+
             const workingBoard = Array.from({ length: rows }, () => Array(cols).fill(0));
             const counts = { ...pieceCounts };
             const usedCounts = { T: 0, I: 0, O: 0, L: 0, J: 0 };
 
+            // 輔助碰撞判定
+            const canPlace = (currBoard, shape, r, c) => {
+                for (const [dr, dc] of shape) {
+                    const nr = r + dr, nc = c + dc;
+                    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols || currBoard[nr][nc] !== 0) return false;
+                }
+                return true;
+            };
+
+            const placePiece = (currBoard, shape, r, c, val) => {
+                for (const [dr, dc] of shape) currBoard[r + dr][c + dc] = val;
+            };
+
+            // 遞迴與回溯
             const solve = async (b) => {
-              if (stopRef.current) return false;
-              localIterations++;
-              if (localIterations % 10000 === 0) {
-                setIterations(localIterations);
-                await new Promise(r => setTimeout(r, 0));
-              }
-              let row = -1, col = -1;
-              findEmpty: for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                  if (b[r][c] === 0) { row = r; col = c; break findEmpty; }
+                if (shouldStop) return false;
+                iterations++;
+
+                // 定期將主執行緒交還給瀏覽器以防畫面當機
+                if (iterations % 10000 === 0) {
+                    document.getElementById('iterations-info').innerText = `正在深度搜尋組合... 已嘗試 ${iterations.toLocaleString()} 次`;
+                    await new Promise(r => setTimeout(r, 0));
                 }
-              }
-              if (row === -1) return true;
-              for (const type in counts) {
-                if (counts[type] <= 0) continue;
-                for (const shape of rotationsCache[type]) {
-                  for (const [dr, dc] of shape) {
-                    const startR = row - dr, startC = col - dc;
-                    if (canPlace(b, shape, startR, startC)) {
-                      const pieceId = `${type}_${type}${usedCounts[type] + 1}`;
-                      placePiece(b, shape, startR, startC, pieceId);
-                      counts[type]--; usedCounts[type]++;
-                      if (await solve(b)) return true;
-                      usedCounts[type]--; counts[type]++;
-                      placePiece(b, shape, startR, startC, 0);
+
+                let row = -1, col = -1;
+                // 尋找第一個空格
+                findEmpty: for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        if (b[r][c] === 0) { row = r; col = c; break findEmpty; }
                     }
-                  }
                 }
-              }
-              return false;
+                
+                // 無空格，解出成功
+                if (row === -1) return true;
+
+                for (const type in counts) {
+                    if (counts[type] <= 0) continue;
+                    for (const shape of rotationsCache[type]) {
+                        for (const [dr, dc] of shape) {
+                            const startR = row - dr;
+                            const startC = col - dc;
+                            if (canPlace(b, shape, startR, startC)) {
+                                const pieceId = `${type}_${type}${usedCounts[type] + 1}`;
+                                placePiece(b, shape, startR, startC, pieceId);
+                                counts[type]--;
+                                usedCounts[type]++;
+
+                                if (await solve(b)) return true;
+
+                                // 回溯
+                                usedCounts[type]--;
+                                counts[type]++;
+                                placePiece(b, shape, startR, startC, 0);
+                            }
+                        }
+                    }
+                }
+                return false;
             };
 
             const startTime = Date.now();
             const result = await solve(workingBoard);
             const endTime = Date.now();
-            if (!stopRef.current) {
-              if (result) {
-                setBoard(workingBoard);
-                setStatus({ type: 'success', message: `找到解法！耗時 ${((endTime - startTime)/1000).toFixed(2)}s` });
-              } else {
-                setStatus({ type: 'error', message: `遍歷完畢，此組合無解` });
-              }
+
+            isSolving = false;
+            document.getElementById('stop-btn').classList.add('hidden');
+            document.getElementById('btn-text').innerText = '開始求解';
+            validate();
+
+            if (shouldStop) {
+                document.getElementById('iterations-info').innerText = '已手動停止運算。';
+                return;
             }
-            setIsSolving(false);
-          };
 
-          const getCellBorders = (r, c) => {
-            const pieceId = board[r][c];
-            if (!pieceId) return "";
-            let borders = "";
-            if (r === 0 || board[r - 1][c] !== pieceId) borders += " border-t-[3px] border-t-black";
-            if (r === rows - 1 || board[r + 1][c] !== pieceId) borders += " border-b-[3px] border-b-black";
-            if (c === 0 || board[r][c - 1] !== pieceId) borders += " border-l-[3px] border-l-black";
-            if (c === cols - 1 || board[r][c + 1] !== pieceId) borders += " border-r-[3px] border-r-black";
-            return borders;
-          };
+            if (result) {
+                board = workingBoard;
+                renderBoard();
+                document.getElementById('iterations-info').innerHTML = `<span class="text-green-400 font-bold">成功！耗時 ${((endTime - startTime)/1000).toFixed(2)} 秒 (試錯 ${iterations.toLocaleString()} 次)</span>`;
+            } else {
+                document.getElementById('iterations-info').innerHTML = `<span class="text-red-400 font-bold">❌ 窮舉完畢，此組合確定無解。</span>`;
+            }
+        }
 
-          return (
-            <div className="min-h-screen bg-gray-950 text-gray-100 p-6 font-sans">
-              <div className="max-w-5xl mx-auto">
-                <header className="text-center mb-10">
-                  <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent inline-block">
-                    Tetris Puzzle Solver
-                  </h1>
-                </header>
-
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  <div className="lg:col-span-4 space-y-6">
-                    <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 shadow-2xl">
-                      <h2 className="flex items-center text-lg font-bold mb-4">
-                        {Square && <Square className="w-5 h-5 mr-2 text-blue-400" />} 矩陣設定
-                      </h2>
-                      <div className="grid grid-cols-2 gap-4 mb-6">
-                        <div>
-                          <label className="text-xs text-gray-500 uppercase font-bold tracking-wider">Rows</label>
-                          <input type="number" value={rows} onChange={e => setRows(Number(e.target.value))} className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 mt-1 focus:ring-2 focus:ring-blue-500 outline-none" />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 uppercase font-bold tracking-wider">Cols</label>
-                          <input type="number" value={cols} onChange={e => setCols(Number(e.target.value))} className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 mt-1 focus:ring-2 focus:ring-blue-500 outline-none" />
-                        </div>
-                      </div>
-
-                      <h2 className="flex items-center text-lg font-bold mb-4">
-                        {RefreshCw && <RefreshCw className="w-5 h-5 mr-2 text-purple-400" />} 方塊庫存
-                      </h2>
-                      <div className="space-y-2">
-                        {Object.entries(pieceCounts).map(([type, count]) => (
-                          <div key={type} className="flex items-center justify-between bg-gray-800/50 p-3 rounded-xl border border-gray-700/50">
-                            <div className="flex items-center">
-                              <div className={`w-4 h-4 rounded-sm ${PIECE_COLORS[type]} mr-3 shadow-sm border border-black/20`}></div>
-                              <span className="font-bold">{type} 型</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <button onClick={() => handleCountChange(type, -1)} className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded-lg hover:bg-gray-600">-</button>
-                              <span className="w-6 text-center font-mono font-bold text-blue-400">{count}</span>
-                              <button onClick={() => handleCountChange(type, 1)} className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded-lg hover:bg-gray-600">+</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="mt-8 pt-6 border-t border-gray-800">
-                        <div className={`flex items-center justify-center p-4 rounded-2xl mb-4 text-sm font-medium ${status.type === 'error' ? 'bg-red-500/10 text-red-400' : status.type === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-blue-500/10 text-blue-400'}`}>
-                          {status.message}
-                        </div>
-                        <button onClick={isSolving ? () => stopRef.current = true : startSolving} disabled={status.type === 'error' && !isSolving} className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center shadow-xl text-white ${isSolving ? 'bg-red-600' : 'bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800'}`}>
-                          {isSolving ? '停止運算' : '開始求解'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="lg:col-span-8 flex flex-col items-center justify-center bg-gray-900 border border-gray-800 rounded-3xl p-8 shadow-2xl min-h-[500px]">
-                    <div className="grid bg-black p-2 rounded-lg border-8 border-gray-800" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, width: '100%', maxWidth: `${cols * 50}px` }}>
-                      {board.map((row, r) => row.map((cell, c) => {
-                        const type = cell ? cell.split('_')[0] : 'empty';
-                        return (
-                          <div key={`${r}-${c}`} className={`aspect-square relative flex items-center justify-center text-[8px] font-black ${PIECE_COLORS[type]} ${getCellBorders(r, c)}`}>
-                            {cell ? <span className="opacity-40">{cell.split('_')[1]}</span> : null}
-                            {cell && <div className="absolute inset-[2px] border-t border-l border-white/20 pointer-events-none" />}
-                          </div>
-                        );
-                      }))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        // 啟動應用程式
+        window.onload = init;
     </script>
 </body>
 </html>
