@@ -57,7 +57,7 @@
                             <input 
                                 type="number" 
                                 id="input-cols" 
-                                value="7" 
+                                value="12" 
                                 min="1"
                                 class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 mt-1 focus:ring-2 focus:ring-blue-500 outline-none text-center font-bold" 
                             />
@@ -148,8 +148,8 @@
         // 全域狀態
         let rows = 8;
         let cols = 12;
-        let pieceCounts = { T: 6, I: 6, O: 6, L: 4, J: 4 };
-        let board = Array.from({ length: 8 }, () => Array(7).fill(0));
+        let pieceCounts = { T: 6, I: 6, O: 4, L: 4, J: 4 };
+        let board = Array.from({ length: 8 }, () => Array(12).fill(0));
         let isSolving = false;
         let iterations = 0;
         let shouldStop = false;
